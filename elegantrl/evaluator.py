@@ -16,8 +16,8 @@ class Evaluator:  # [ElegantRL.2022.01.01]
         self.agent_id = agent_id
         self.eval_env = eval_env
         self.eval_gap = args.eval_gap
-        self.eval_times1 = max(1, int(args.eval_times / np.e))
-        self.eval_times2 = max(1, int(args.eval_times - self.eval_times1))
+        self.eval_times1 = args.eval_times#max(1, int(args.eval_times / np.e))
+        self.eval_times2 = args.eval_times#max(1, int(args.eval_times - self.eval_times1))
         self.target_return = args.target_return
 
         self.r_max = -np.inf
@@ -32,7 +32,6 @@ class Evaluator:  # [ElegantRL.2022.01.01]
 
     def evaluate_save_and_plot(self, act, steps, r_exp, log_tuple, seed=0) -> Tuple[bool, bool]:  # 2021-09-09
         self.total_step += steps  # update total training steps
-        self.eval_env.seed(seed)
 
         if time.time() - self.eval_time < self.eval_gap:
             if_reach_goal = False
@@ -41,6 +40,7 @@ class Evaluator:  # [ElegantRL.2022.01.01]
             self.eval_time = time.time()
 
             '''evaluate first time'''
+            self.eval_env.seed(seed)
             rewards_steps_list = [get_episode_return_and_step(self.eval_env, act)
                                   for _ in range(self.eval_times1)]
             rewards_steps_ary = np.array(rewards_steps_list, dtype=np.float32)
@@ -49,6 +49,7 @@ class Evaluator:  # [ElegantRL.2022.01.01]
 
             '''evaluate second time'''
             if r_avg > self.r_max:
+                self.eval_env.seed(seed)
                 rewards_steps_list.extend([get_episode_return_and_step(self.eval_env, act)
                                            for _ in range(self.eval_times2)])
                 rewards_steps_ary = np.array(rewards_steps_list, dtype=np.float32)
@@ -131,12 +132,13 @@ def get_episode_return_and_step(env, act) -> Tuple[float, int]:  # [ElegantRL.20
         row_state = np.reshape(state, (1, *state.shape))
         s_tensor = torch.as_tensor(row_state, dtype=torch.float32, device=device)
         a_tensor = act(s_tensor)
+        ares = a_tensor
         if if_discrete:
             a_tensor = a_tensor.argmax(dim=1)
         action = a_tensor.detach().cpu().numpy()[0]  # not need detach(), because using torch.no_grad() outside
         state, reward, done, _ = env.step(action)
         if tag:
-            save_episode(state, action, reward)
+            save_episode(state, action, reward, ares)
         episode_return += reward
         if done:
             break
@@ -210,11 +212,13 @@ def save_learning_curve(recorder=None, cwd='.', save_title='learning curve', fig
     plt.close('all')  # avoiding warning about too many open figures, rcParam `figure.max_open_warning`
     # plt.show()  # if use `mpl.use('Agg')` to draw figures without GUI, then plt can't plt.show()
 
-def save_episode(state, action, reward):
+def save_episode(state, action, reward, a_tensor):
     with open('./a.txt', 'a') as f:
         f.write(str(state[-5:]))
         f.write('\n')
         f.write(str(action))
         f.write('\n')
         f.write(str(reward))
+        f.write('\n')
+        f.write(str(a_tensor))
         f.write('\n')

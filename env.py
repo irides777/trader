@@ -33,7 +33,7 @@ class BaseMarket(gym.Env):
         self.bid = self.tick_state[0]
         self.ask = self.tick_state[1]
         self.state = np.vstack([
-            np.array([self.order_price, self.order_position,self.time_limit-self.time,0,0]),
+            np.array([self.time_limit-self.time,0,0,0,0]),
             self.episode_data.iloc[self.time:self.time+self.back_length].values
         ]).reshape(-1)
 
@@ -44,6 +44,8 @@ class BaseMarket(gym.Env):
         环境接收到智能体的操作信号后，首先更新下单价格与下单仓位，之后更新tick数据，判断是否成交，返回相应状态和奖励
         0:在bid0价格上等待 1:以ask价格成交
         '''
+        done = False
+        reward = 0
         if action == 1:
             reward = -self.ask+1
             done = True
@@ -53,25 +55,26 @@ class BaseMarket(gym.Env):
         
         self._update()
 
-        if self.bid < self.order_price and self.order_position > 0:
-            reward = -self.order_price+1
+        if action == 0 and self.bid < 0:
+            reward = 1
             done = True
-        elif action == 2:
+        elif action == 0 and self.time >= self.time_limit:
             reward = -self.ask+1
             done = True
-        elif self.time >= self.time_limit:
-            reward = -self.ask+1
-            done = True
-        else:
-            reward = -0.03
-            done = False
+        # elif action == 2:
+        #     reward = -self.ask+1
+        #     done = True
+        # elif self.time >= self.time_limit:
+        #     reward = -self.ask+1
+        #     done = True
+        # else:
+        #     reward = -0.03
+        #     done = False
 
         return self.state, reward, done, {}
 
     def reset(self):
 
-        self.order_price = 0
-        self.order_position = 0
         self.time = 0
         
         data = self.datas[self.np_random.randint(low=0,high=len(self.datas))]
@@ -91,7 +94,7 @@ class BaseMarket(gym.Env):
         self.bid = self.tick_state[0]
         self.ask = self.tick_state[1]
         self.state = np.vstack([
-            np.array([0,0,self.time_limit,0,0]),
+            np.array([self.time_limit,0,0,0,0]),
             self.episode_data.iloc[:self.back_length].values
         ]).reshape(-1)
         return self.state
