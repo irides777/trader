@@ -31,6 +31,19 @@ def nticks_lv(env, lv_tick):
         tot += reward
     return tot
 
+def all_tk(env, hd_time, lv_tick):
+    done = False
+    action = 0
+    tot = 0
+    state = env.reset()
+    while not done:
+        bid = state[-5]
+        if bid >= lv_tick:
+            action = 1
+        state, reward, done, _ = env.step(action)
+        tot += reward
+        hd_time -= 1
+    return tot
 
 def preprocess(tickpath, filename):
     tickdf = pd.read_csv(os.path.join(tickpath, filename),names=['date','time','ms','lastprice','volume','bid','bidv','ask','askv','opi','tur','contract'])
@@ -69,7 +82,7 @@ if __name__ == '__main__':
             data = preprocess(cwd, file)
             datas.append(data)
 
-    env = BaseMarket(datas, 100, 600)
+    env = BaseMarket(datas, 100, 1200)
     times = int(sys.argv[1])
     env.seed(123)
     tot = 0
@@ -95,3 +108,7 @@ if __name__ == '__main__':
                 print(f'1000 times avg: {tmp/1000}')
                 tmp = 0
         print(tot/times)
+    elif sys.argv[2] == 'all':
+        hd_time = int(sys.argv[3])
+        lv_ticks = int(sys.argv[3])
+

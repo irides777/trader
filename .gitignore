@@ -1,0 +1,8 @@
+/data
+/.vscode
+/.ipynb_checkpoints
+/__pycache__
+/executioner_D3QN_*
+*.txt
+*.jpg
+*.csv

@@ -9,7 +9,8 @@ class BaseMarket(gym.Env):
     '''
 
     def __init__(self, datas:List,  back_length, time_limit):
-
+        
+        self.np_random = np.random.RandomState()
         self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=((back_length+1)*5,)
@@ -22,6 +23,8 @@ class BaseMarket(gym.Env):
 
         self.back_length = back_length
         self.time_limit = time_limit
+
+        self.is_eval = False
         
 
     def _update(self):
@@ -77,7 +80,13 @@ class BaseMarket(gym.Env):
 
         self.time = 0
         
-        data = self.datas[self.np_random.randint(low=0,high=len(self.datas))]
+        ub = int(len(self.datas)*0.99)
+
+        if not self.is_eval: 
+            data = self.datas[self.np_random.randint(low=0,high=ub)]
+        else:
+            data = self.datas[self.np_random.randint(low=ub,high=len(self.datas))]
+
         begin_time = self.np_random.randint(
             low=self.back_length, 
             high=data.shape[0]-self.time_limit
@@ -101,5 +110,6 @@ class BaseMarket(gym.Env):
 
     def seed(self, seed=None):
         self.np_random = np.random.RandomState(seed)
+        self.is_eval=True
 
     
