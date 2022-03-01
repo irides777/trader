@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import gym
 from gym import spaces
 
@@ -17,12 +16,8 @@ class BaseMarket(gym.Env):
         )
 
         self.datas = []
-        self.lens = []
         for data in datas:
             self.datas.append(data[['bid','ask','bidv','askv','volume']].copy()) #
-            self.lens.append(data.shape[0])
-        self.datas = pd.concat(self.datas).values
-        self.lens = np.cumsum(self.lens)
         # self.data.loc[:,'tur'] = self.data['tur']/self.data['volume']
 
         self.back_length = back_length
@@ -36,12 +31,12 @@ class BaseMarket(gym.Env):
         更新tick数据
         '''
         self.time = self.time+1
-        self.tick_state = self.episode_data[self.time+self.back_length-1]
+        self.tick_state = self.episode_data.iloc[self.time+self.back_length-1].values
         self.bid = self.tick_state[0]
         self.ask = self.tick_state[1]
         self.state = np.vstack([
             np.array([self.time_limit-self.time,0,0,0,0]),
-            self.episode_data[self.time:self.time+self.back_length]
+            self.episode_data.iloc[self.time:self.time+self.back_length].values
         ]).reshape(-1)
 
 
@@ -84,14 +79,12 @@ class BaseMarket(gym.Env):
 
         self.time = 0
         
-        ub = int(len(self.lens)*0.95)
+        ub = int(len(self.datas)*0.99)
 
         if not self.is_eval: 
-            day = self.np_random.randint(low=0,high=ub)
+            data = self.datas[self.np_random.randint(low=0,high=ub)]
         else:
-            day = self.np_random.randint(low=ub,high=len(self.lens))
-        beg = self.lens[day-1] if day>0 else 0
-        data = self.datas[beg:self.lens[day]]
+            data = self.datas[self.np_random.randint(low=ub,high=len(self.datas))]
 
         begin_time = self.np_random.randint(
             low=self.back_length, 
@@ -99,21 +92,23 @@ class BaseMarket(gym.Env):
         )
         end_time = begin_time+self.time_limit
 
-        self.episode_data = data[begin_time-self.back_length+1:end_time+1].copy()
-        self.target_price = self.episode_data[self.back_length-1,0]
+        self.episode_data = data.iloc[begin_time-self.back_length+1:end_time+1].copy()
+        self.target_price = self.episode_data.iloc[self.back_length-1,0]
         
-        self.episode_data[:,0] = self.episode_data[:,0]-self.target_price
-        self.episode_data[:,1] = self.episode_data[:,1]-self.target_price
+        self.episode_data.loc[:,'bid'] = self.episode_data['bid']-self.target_price
+        self.episode_data.loc[:,'ask'] = self.episode_data['ask']-self.target_price
 
-        self.tick_state = self.episode_data[self.back_length-1]
+        self.tick_state = self.episode_data.iloc[self.back_length-1].values
         self.bid = self.tick_state[0]
         self.ask = self.tick_state[1]
         self.state = np.vstack([
             np.array([self.time_limit,0,0,0,0]),
-            self.episode_data[:self.back_length]
+            self.episode_data.iloc[:self.back_length].values
         ]).reshape(-1)
         return self.state
 
     def seed(self, seed=None):
         self.np_random = np.random.RandomState(seed)
         self.is_eval=True
+
+    

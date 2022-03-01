@@ -3,6 +3,31 @@ import pandas as pd
 import gym
 from gym import spaces
 
+def preprocess(tickpath, filename):
+    tickdf = pd.read_csv(os.path.join(tickpath, filename),names=['date','time','ms','lastprice','volume','bid','bidv','ask','askv','opi','tur','contract'])
+    tickdf.loc[:,'datestr'] = tickdf['date'].apply(lambda x: '%s-%s-%s'%(str(x)[:4], str(x)[4:6], str(x)[6:8]))
+    tickdf['timestr'] = tickdf['time'].apply(lambda x: '%s:%s:%s'%(format(x, '06d')[:-4], format(x, '06d')[-4:-2], format(x, '06d')[-2:]))
+    tickdf['timestr'] = tickdf['timestr']+'.'+tickdf['ms'].apply(lambda x: format(x, '03d'))
+    tickdf = tickdf.set_index(pd.to_datetime(tickdf['datestr']+' '+tickdf['timestr']))
+    tickdf.index.name = 'datetime'
+    tickdf.loc[tickdf['bid']<0.9*tickdf['lastprice'], 'bid'] = np.nan
+    tickdf.loc[tickdf['ask']<0.9*tickdf['lastprice'], 'ask'] = np.nan
+    tickdf[['bid','ask']] = tickdf[['bid','ask']].fillna(method='ffill').fillna(tickdf.iloc[0]['lastprice'])
+    tickdf['midprice'] = (tickdf['ask']+tickdf['bid'])/2.0
+
+    tdata = tickdf[['bid','ask','bidv','askv','volume']]
+    std = tdata.iloc[0,0]
+    tdata.loc[:,'bid'] = tdata['bid']-std
+    tdata.loc[:,'ask'] = tdata['ask']-std
+
+    def norm(x):
+        return (x-x.mean())/x.std()
+
+    tdata.loc[:,'askv'] = norm(tdata.askv)
+    tdata.loc[:,'bidv'] = norm(tdata.bidv)
+    tdata.loc[:,'volume'] = norm(tdata.volume)
+    return tdata
+
 class BaseMarket(gym.Env):
     '''
     基础环境
@@ -117,3 +142,39 @@ class BaseMarket(gym.Env):
     def seed(self, seed=None):
         self.np_random = np.random.RandomState(seed)
         self.is_eval=True
+
+import os
+import time
+import warnings
+
+warnings.filterwarnings('ignore')
+
+time_start = time.time()
+cwd = '/Data/database/data_zltick/rb'
+datas = []
+for _,__, files in os.walk(cwd):
+    for file in files:
+        if int(file[:4])<2020:
+            continue
+        data = preprocess(cwd, file)
+        datas.append(data)
+time_end = time.time()
+print(time_end-time_start)
+
+time_start = time.time()
+env = BaseMarket(datas=datas,back_length=100,time_limit=600)
+tot = 0
+env.seed(567)
+for i in range(1024):
+    done = False
+    state = env.reset()
+    action = 0
+    while not done:
+        state, reward, done, _ = env.step(action)
+        if state[0] == 1:
+            action = 1
+    # print(reward)
+    tot += reward
+print(tot/1024)
+time_end = time.time()
+print(time_end-time_start)
