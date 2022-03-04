@@ -155,7 +155,11 @@ class QNetTwinDuel(nn.Module):  # D3QN: Dueling Double DQN
         if rd.rand() > self.explore_rate:
             return q.argmax(dim=1, keepdim=True)
         a_prob = self.soft_max(q)
-        return torch.multinomial(a_prob, num_samples=1)
+        try:
+            return torch.multinomial(a_prob, num_samples=1)
+        except RuntimeError:
+            print(a_prob)
+            print(s)
 
 
 '''Actor (policy network)'''

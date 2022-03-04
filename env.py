@@ -77,6 +77,7 @@ class BaseMarket(gym.Env):
         # else:
         #     reward = -0.03
         #     done = False
+        assert not np.isnan(self.state).any()
 
         return self.state, reward, done, {}
 
@@ -84,14 +85,16 @@ class BaseMarket(gym.Env):
 
         self.time = 0
         
-        ub = int(len(self.lens)*0.95)
+        ub = int(len(self.lens)*0.9)
 
         if not self.is_eval: 
             day = self.np_random.randint(low=0,high=ub)
         else:
             day = self.np_random.randint(low=ub,high=len(self.lens))
+        # for day in range(len(self.lens)):
         beg = self.lens[day-1] if day>0 else 0
         data = self.datas[beg:self.lens[day]]
+        #     assert not np.isnan(data).any()
 
         begin_time = self.np_random.randint(
             low=self.back_length, 
