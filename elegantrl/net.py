@@ -158,8 +158,9 @@ class QNetTwinDuel(nn.Module):  # D3QN: Dueling Double DQN
         try:
             return torch.multinomial(a_prob, num_samples=1)
         except RuntimeError:
+            print(next(self.net_state.named_parameters()))
             print(a_prob)
-            print(s)
+            print(state)
 
 
 '''Actor (policy network)'''

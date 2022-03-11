@@ -87,23 +87,29 @@ class BaseMarket(gym.Env):
         
         ub = int(len(self.lens)*0.9)
 
-        if not self.is_eval: 
-            day = self.np_random.randint(low=0,high=ub)
-        else:
-            day = self.np_random.randint(low=ub,high=len(self.lens))
-        # for day in range(len(self.lens)):
-        beg = self.lens[day-1] if day>0 else 0
-        data = self.datas[beg:self.lens[day]]
-        #     assert not np.isnan(data).any()
+        ok = False
 
-        begin_time = self.np_random.randint(
-            low=self.back_length, 
-            high=data.shape[0]-self.time_limit
-        )
-        end_time = begin_time+self.time_limit
+        while not ok:
 
-        self.episode_data = data[begin_time-self.back_length+1:end_time+1].copy()
-        self.target_price = self.episode_data[self.back_length-1,0]
+            if not self.is_eval: 
+                day = self.np_random.randint(low=0,high=ub)
+            else:
+                day = self.np_random.randint(low=ub,high=len(self.lens))
+            # for day in range(len(self.lens)):
+            beg = self.lens[day-1] if day>0 else 0
+            data = self.datas[beg:self.lens[day]]
+            #     assert not np.isnan(data).any()
+
+            begin_time = self.np_random.randint(
+                low=self.back_length, 
+                high=data.shape[0]-self.time_limit
+            )
+            end_time = begin_time+self.time_limit
+
+            self.episode_data = data[begin_time-self.back_length+1:end_time+1].copy()
+            self.target_price = self.episode_data[self.back_length-1,0]
+
+            ok = self._data_check()
         
         self.episode_data[:,0] = self.episode_data[:,0]-self.target_price
         self.episode_data[:,1] = self.episode_data[:,1]-self.target_price
@@ -120,3 +126,10 @@ class BaseMarket(gym.Env):
     def seed(self, seed=None):
         self.np_random = np.random.RandomState(seed)
         self.is_eval=True
+
+    def _data_check(self):
+        data = self.episode_data
+        ok = np.all(data[:,0] < data[:,1]) \
+            and np.all(data != np.inf) \
+            and np.all(data != -np.inf)
+        return ok
