@@ -103,8 +103,8 @@ if __name__ == '__main__':
 
     dates = [n.strftime("%Y%m%d") for n in daterange(start_date, end_date)]
 
-    # ff = open('out.txt','w')
-    # sys.stdout = ff
+    ff = open('out.txt','w')
+    sys.stdout = ff
     outputs = [] 
     # for obj in ['m', 'ag', 'al', 'v', 'pp', 'SA', 'rb']:
     for dat, data in daily_data_generator(obj, dates, '/Data/database/data_zltick'):
@@ -118,15 +118,12 @@ if __name__ == '__main__':
             a = []
             b = [state[-5:]]
             while not done:
-                # ten_s = torch.as_tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-                # ten_a = age.act(ten_s)
-                # a.append(ten_a)
-                # ten_a = ten_a.argmax(dim=1).cpu().numpy()[0]
-                ten_a = 0
+                ten_s = torch.as_tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+                ten_a = age.act(ten_s)
+                a.append(ten_a)
+                ten_a = ten_a.argmax(dim=1).cpu().numpy()[0]
                 state, reward, done, _ = env.step(ten_a)  # different
-                if state[0] == 1:
-                    ten_a = 1
-                # b.append(state[-5:])
+                b.append(state[-5:])
                 stepn += 1
             
             # action = 0
@@ -136,14 +133,14 @@ if __name__ == '__main__':
             #         action = 1
             steps.append(stepn)
             tot.append(reward)
-            # if reward < -10 :
-            #     print(begin//2, begin//2/60, begin//2/3600)
-            #     for aa, bb in zip(a,b):
-            #         print(bb)
-            #         print(aa)
-            #     print(reward)
+            if reward < -10 :
+                print(begin//2, begin//2/60, begin//2/3600)
+                for aa, bb in zip(a,b):
+                    print(bb)
+                    print(aa)
+                print(reward)
         outputs.append([dat, np.mean(tot), np.std(tot), np.mean(steps), np.std(steps)])
         break
-    # print(outputs)
-    # ff.close()
-    pd.DataFrame(outputs, columns=['date','avgR','stdR', 'avgS', 'stdS']).to_csv(obj+'.csv', index=False)
+    print(outputs)
+    ff.close()
+    # pd.DataFrame(outputs, columns=['date','avgR','stdR', 'avgS', 'stdS']).to_csv(obj+'.csv', index=False)

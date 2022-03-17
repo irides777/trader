@@ -18,6 +18,11 @@ class BaseMarket(gym.Env):
 
         self.datas = []
         self.lens = []
+        for data in datas:
+            self.datas.append(data[['bid','ask','bidv','askv','volume']].copy()) #
+            self.lens.append(data.shape[0])
+        self.datas = pd.concat(self.datas).values
+        self.lens = np.cumsum(self.lens)
         # self.data.loc[:,'tur'] = self.data['tur']/self.data['volume']
 
         self.back_length = back_length
@@ -79,7 +84,7 @@ class BaseMarket(gym.Env):
     def reset(self):
 
         self.time = 0
-        ub = int(len(self.lens)*0.9)
+        ub = int(len(self.lens))
         ok = False
 
         while not ok:
@@ -187,12 +192,11 @@ class TestMarket(gym.Env):
 
         self.time = 0
 
-        self.episode_data = data[['bid','ask','bidv','askv','volume']].values
+        self.episode_data = data.copy()
 
         self.target_price = self.episode_data[self.back_length-1,0]
 
-        if not self._data_check():
-            raise ValueError
+        self._data_check()
         
         self.episode_data[:,0] = self.episode_data[:,0]-self.target_price
         self.episode_data[:,1] = self.episode_data[:,1]-self.target_price
@@ -212,7 +216,8 @@ class TestMarket(gym.Env):
 
     def _data_check(self):
         data = self.episode_data
-        ok = np.all(data[:,0] < data[:,1]) \
-            and np.all(data != np.inf) \
+        ok = np.all(data != np.inf) \
             and np.all(data != -np.inf)
-        return ok
+        if not ok:
+            print(data[data[:,0] >= data[:,1]])
+            raise ValueError
