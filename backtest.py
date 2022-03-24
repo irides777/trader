@@ -63,10 +63,74 @@ def daterange(start_date, end_date):
     for n in range(int ((end_date - start_date).days)):
         yield start_date + timedelta(n)
 
+class Agent(object):
+
+    def __init__(self, name, cwd='.'):
+        self.name = name
+        self.cwd = cwd
+        self.log = []
+
+    def policy(self, state):
+        raise NotImplementedError
+    
+    def logging(self, date, rewards, steps, fins):
+        self.log.append([
+            date,
+            np.mean(rewards), np.std(rewards),
+            np.mean(steps), np.std(steps),
+            np.mean(fins)
+        ])
+    
+    def output(self):
+        path = os.path.join(self.cwd, self.name+'.csv')
+        pd.DataFrame(self.log,
+            columns=['date', 'avgR','stdR', 'avgS', 'stdS', 'fin']
+        ).to_csv(path, index=False)
+        
+        self.log.clear()
+
+class HDAgent(Agent):
+
+    def __init__(self, hd_ticks, obj):
+        name = f'HD{hd_ticks}'
+        cwd = f'./res/{obj}'
+        super().__init__(name, cwd)
+        self.hd_ticks = hd_ticks
+
+    def policy(self, state):
+        return 1 if state[0] < 600-self.hd_ticks else 0
+
+class LVAgent(Agent):
+
+    def __init__(self, lv_units, obj):
+        name = f'LV{lv_units}'
+        cwd = f'./res/{obj}'
+        super().__init__(name, cwd)
+        self.lv_units = lv_units 
+
+    def policy(self, state):
+        return 1 if state[-5] > self.lv_units else 0
+class RLAgent(Agent):
+
+    def __init__(self, obj, age, device):
+        name = 'DRL'
+        cwd = f'./res/{obj}'
+        super().__init__(name, cwd)
+        self.age = age
+        self.device = device
+    
+    def policy(self, state):
+        ten_s = torch.as_tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+        ten_a = self.age.act(ten_s)
+        action = ten_a.argmax(dim=1).cpu().numpy()[0]
+        return action
+
+
 if __name__ == '__main__':
     torch.set_grad_enabled(False)
 
     obj = sys.argv[1]
+    lv = 90
     gpu_id = int(sys.argv[2])
     env_args = {
         'env_num': 1,
@@ -96,54 +160,34 @@ if __name__ == '__main__':
     env = TestMarket(back_length=bl, time_limit=tl)
     env = build_env(env, args.env_func, env_args)
     age = init_agent(args, gpu_id)
-    device = torch.device(f'cuda:{args.learner_gpus}')
+    # device = torch.device(f'cuda:{args.learner_gpus}')
+    device = torch.device('cpu')
 
-    start_date = date(2021, 10, 28)
-    end_date = date(2022, 1, 1)
+    start_date = date(2021, 7, 1)
+    end_date = date(2021, 7, 2)
 
     dates = [n.strftime("%Y%m%d") for n in daterange(start_date, end_date)]
 
-    # ff = open('out.txt','w')
-    # sys.stdout = ff
     outputs = [] 
+    # exec = HDAgent(600, obj)
+    exec = RLAgent(obj, age, device)
     # for obj in ['m', 'ag', 'al', 'v', 'pp', 'SA', 'rb']:
     for dat, data in daily_data_generator(obj, dates, '/Data/database/data_zltick'):
         tot = []
         steps = []
-        for begin in range(bl, data.shape[0]-tl):
+        fin = []
+        for begin in range(bl, data.shape[0]-tl, 30):
             trade_data = data[begin-bl+1:begin+tl+1]
             state = env.reset(trade_data)
             done = False
             stepn = 0
-            a = []
-            b = [state[-5:]]
+            action = exec.policy(state)
             while not done:
-                # ten_s = torch.as_tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-                # ten_a = age.act(ten_s)
-                # a.append(ten_a)
-                # ten_a = ten_a.argmax(dim=1).cpu().numpy()[0]
-                ten_a = 0
-                state, reward, done, _ = env.step(ten_a)  # different
-                if state[0] == 1:
-                    ten_a = 1
-                # b.append(state[-5:])
+                state, reward, done, _ = env.step(action)  # different
+                action = exec.policy(state)
                 stepn += 1
-            
-            # action = 0
-            # while not done:
-            #     state, reward, done, _ = env.step(action)
-            #     if state[0] == 1:
-            #         action = 1
             steps.append(stepn)
             tot.append(reward)
-            # if reward < -10 :
-            #     print(begin//2, begin//2/60, begin//2/3600)
-            #     for aa, bb in zip(a,b):
-            #         print(bb)
-            #         print(aa)
-            #     print(reward)
-        outputs.append([dat, np.mean(tot), np.std(tot), np.mean(steps), np.std(steps)])
-        break
-    # print(outputs)
-    # ff.close()
-    pd.DataFrame(outputs, columns=['date','avgR','stdR', 'avgS', 'stdS']).to_csv(obj+'.csv', index=False)
+            fin.append(1 if reward>0 else 0)
+        exec.logging(dat, tot, steps, fin)
+    exec.output()
