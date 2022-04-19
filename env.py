@@ -40,11 +40,13 @@ class BaseMarket(gym.Env):
         self.tick_state = self.episode_data[self.time+self.back_length-1]
         self.bid = self.tick_state[0]
         self.ask = self.tick_state[1]
-        self.state = np.vstack([
-            np.array([self.time_limit-self.time,0,0,0,0]),
-            self.episode_data[self.time:self.time+self.back_length]
-        ]).reshape(-1)
-
+        if self.time+self.back_length >= len(self.episode_data):
+            self.time = self.time_limit
+        else:
+            self.state = np.vstack([
+                np.array([self.time_limit-self.time,0,0,0,0]),
+                self.episode_data[self.time:self.time+self.back_length]
+            ]).reshape(-1)
 
 
     def step(self, action):

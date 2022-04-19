@@ -9,6 +9,9 @@ import torch
 import elegantrl.agent as agent
 from elegantrl.config import Arguments
 from util import *
+from multiprocessing import Process, Manager, Pool
+import time
+import signal
 # args.init_before_training()
 
 def daily_data_generator(obj, dates, cwd='.'):
@@ -33,6 +36,7 @@ def log_data_generator(dat, obj='rb',
     try:
         a, acc = SingleDayHDAll('acc_sub.txt', log_path, dat) 
     except KeyError:
+        print('keyerror!')
         return
 
     tick_data, contract = preprocess(tick_path, dat+'.csv')
@@ -50,9 +54,8 @@ def log_data_generator(dat, obj='rb',
        'filled_seconds', 'filled_date', 'pv', 'filled_price',]]
     a['ticktime'] = a.ticktime.apply(lambda x:x+'00' if x.split('.')[1]=='0' else x)
 
-
     for _,trade in a.iterrows():
-
+        
         if trade.isnull().any():
             continue
 
@@ -149,18 +152,15 @@ class RLAgent(Agent):
         self.device = device
     
     def policy(self, state):
-        ten_s = torch.as_tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+        ten_s = torch.as_tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
         ten_a = self.age.act(ten_s)
         action = ten_a.argmax(dim=1).cpu().numpy()[0]
         return action
 
-
-if __name__ == '__main__':
-    torch.set_grad_enabled(False)
-
-    obj = sys.argv[1]
-    lv = 90
-    gpu_id = int(sys.argv[2])
+def backtest(obj, gpus=0):
+    # gpu_id = int(sys.argv[2])
+    gpu_id = gpus if gpus==0 else gpus.get()
+    print(f'{obj} backtest begins, gpu id:{gpu_id}')
     # direct = int(sys.argv[3])
     tick = pd.read_csv('symbol_instrumentid2.csv')
     tick = tick[tick.pz==obj].tick.values[0]
@@ -168,6 +168,8 @@ if __name__ == '__main__':
     buy_path = f'/Data/hongyuan/{obj}1'
     sell_path = f'/Data/hongyuan/{obj}-1'
     if not os.path.exists(buy_path) or not os.path.exists(sell_path):
+        raise NotImplementedError
+    if len(os.listdir(buy_path))==0 or len(os.listdir(sell_path))==0:
         raise NotImplementedError
     env_args = {
         'env_num': 1,
@@ -219,56 +221,85 @@ if __name__ == '__main__':
     sell_exec = RLAgent(obj, age, device, 'DRLSell')
     summary = []
 
+
     for dat in dates:
         b = []
         c = []
         not_trade_date = True
         # for dir, agg, pss, trade in log_data_generator(dat):
-        for trade, tdata in log_data_generator(dat, obj):
-            if trade.fx == 1:
-                env = buyenv
-                exec = buy_exec
-            elif trade.fx == -1:
-                env = sellenv
-                exec = sell_exec
-            else:
-                raise ValueError
-            not_trade_date = False
-            state = env.reset(tdata)
-            done = False
-            stepn = 0
-            action = exec.policy(state)
-            while not done:
-                state, reward, done, _ = env.step(action)  # different
+        try:
+            for trade, tdata in log_data_generator(dat, obj):
+                if trade.fx == 1:
+                    env = buyenv
+                    exec = buy_exec
+                elif trade.fx == -1:
+                    env = sellenv
+                    exec = sell_exec
+                else:
+                    raise ValueError
+                not_trade_date = False
+                state = env.reset(tdata)
+                done = False
+                stepn = 0
                 action = exec.policy(state)
-                stepn += 1
-            b.append([stepn/2.0, tick*chengshu*(1-reward), trade.pss_cost, trade.agg_cost]) 
-            c.append(trade)
-        if not_trade_date:
-            continue
-        print(dat)
-        b = pd.DataFrame(b, columns=['stepn','drl','pss','agg']).reset_index().drop('index', axis=1)
-        c = pd.DataFrame(c).reset_index().drop('index', axis=1)
-        c = pd.concat([b,c], axis=1)
+                while not done:
+                    state, reward, done, _ = env.step(action)  # different
+                    action = exec.policy(state)
+                    stepn += 1
+                b.append([stepn/2.0, tick*chengshu*(1-reward), trade.pss_cost, trade.agg_cost]) 
+                c.append(trade)
+            if not_trade_date:
+                continue
+            b = pd.DataFrame(b, columns=['stepn','drl','pss','agg']).reset_index().drop('index', axis=1)
+            c = pd.DataFrame(c).reset_index().drop('index', axis=1)
+            c = pd.concat([b,c], axis=1)
 
-        c['drl'] = c.apply(lambda x:x.pss if x.filled_seconds<=x.stepn else x.drl, axis=1)
-        c = c[['ticktime', 'drl','pss','agg','stepn','filled_seconds']]
-        save_path = f'res/{obj}/trade/'
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-        c.to_csv(os.path.join(save_path, str(dat)+'.csv'), index=False)
-        summ = c.iloc[:,1:].sum()
-        lens = len(c)
-        summ['date'] = dat
-        summ['avg_drl_sec'] = summ.stepn/lens
-        summ['avg_pss_sec'] = summ.filled_seconds/lens
-        summ = summ[['date','drl','pss','agg','avg_drl_sec','avg_pss_sec']]
-        summary.append(summ.to_frame().T)
-        print(summ.to_frame().T)
+            c['drl'] = c.apply(lambda x:x.pss if x.filled_seconds<=x.stepn else x.drl, axis=1)
+            c = c[['ticktime', 'drl','pss','agg','stepn','filled_seconds']]
+            save_path = f'res/{obj}/trade/'
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            c.to_csv(os.path.join(save_path, str(dat)+'.csv'), index=False)
+            summ = c.iloc[:,1:].sum()
+            lens = len(c)
+            summ['date'] = dat
+            summ['avg_drl_sec'] = summ.stepn/lens
+            summ['avg_pss_sec'] = summ.filled_seconds/lens
+            summ = summ[['date','drl','pss','agg','avg_drl_sec','avg_pss_sec']]
+            summary.append(summ.to_frame().T)
+            print(summ.to_frame().T)
+        except (ValueError, IndexError) as e:
+            print(obj)
+            print('data error!')
     
     summary = pd.concat(summary, axis=0)
     summary.to_csv(f'res/{obj}/trade/sum.csv', index=False)
+
+    gpus.put(gpu_id)
+    print(f'{obj} backtest ends successfully, release gpu id:{gpu_id}')
+    os.kill(os.getpid(), signal.SIGTERM)
+
+
+
+if __name__ == '__main__':
+    torch.set_grad_enabled(False)
+
+    data = pd.read_csv('symbol_instrumentid2.csv')
+    objs = data.pz.unique()
     
+    gpus = Manager().Queue(8)
+    for i in range(8):
+        gpus.put(i)
+
+    print(f'main process:{os.getpid()}')
+
+    ps = Pool(60)
+    
+    for obj in objs:
+        ps.apply_async(backtest, (obj, gpus))
+    
+    ps.close()
+    ps.join()
     # for obj in ['m', 'ag', 'al', 'v', 'pp', 'SA', 'rb']:
     # env = buyenv
     # exec = buy_exec

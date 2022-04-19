@@ -80,7 +80,7 @@ mdir = '/Data/hongyuan'
 
 if __name__ == '__main__':
     data = pd.read_csv('symbol_instrumentid2.csv')
-    objs = ['rr', 'pb', 'sn', 'al']
+    objs = data.pz.unique()
 
     gpus = Manager().Queue(8)
     for i in range(8):
@@ -91,8 +91,13 @@ if __name__ == '__main__':
     # print(len(objs))
     ps = Pool(120)
     for obj in objs:
-        ps.apply_async(train_trader, (20180101, 20220101, obj, 1, gpus))
-        ps.apply_async(train_trader, (20180101, 20220101, obj, -1, gpus))
+        buy_path = f'/Data/hongyuan/{obj}1'
+        sell_path = f'/Data/hongyuan/{obj}-1'
+        if (not os.path.exists(buy_path) or not os.path.exists(sell_path))\
+            or (len(os.listdir(buy_path))==0 or len(os.listdir(sell_path))==0):
+            print(obj)
+            ps.apply_async(train_trader, (20180101, 20220101, obj, 1, gpus))
+            ps.apply_async(train_trader, (20180101, 20220101, obj, -1, gpus))
         # train_trader(20180101, 20220101, obj, 1)
         # train_trader(20180101, 20180601, obj, 1, gpus)
     ps.close()

@@ -472,8 +472,10 @@ def preprocess(tickpath='/Data/database/data_zltick/rb', filename='20220321.csv'
     tdata.loc[:,'bidv'] = norm(tdata.bidv)
     tdata.loc[:,'volume'] = norm(tdata.volume)
     # print(type(tdata.isnull()))
+    # print(tdata)
     if pd.isnull(tdata).any().any():
         print('drop it')
         print(filename)
+        # print(tdata[pd.isnull(tdata)])
         raise ValueError
     return tdata, contract
