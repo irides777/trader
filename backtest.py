@@ -157,16 +157,17 @@ class RLAgent(Agent):
         action = ten_a.argmax(dim=1).cpu().numpy()[0]
         return action
 
-def backtest(obj, gpus=0):
+def backtest(obj, gpus, comment):
     # gpu_id = int(sys.argv[2])
     gpu_id = gpus if gpus==0 else gpus.get()
     print(f'{obj} backtest begins, gpu id:{gpu_id}')
+    mdir = '/Data/hongyuan'
     # direct = int(sys.argv[3])
     tick = pd.read_csv('symbol_instrumentid2.csv')
     tick = tick[tick.pz==obj].tick.values[0]
     chengshu = get_unit_cost(obj.lower())[1]
-    buy_path = f'/Data/hongyuan/{obj}1'
-    sell_path = f'/Data/hongyuan/{obj}-1'
+    buy_path = os.path.join(mdir, comment, f'{obj}1')
+    sell_path = os.path.join(mdir, comment, f'{obj}-1')
     if not os.path.exists(buy_path) or not os.path.exists(sell_path):
         raise NotImplementedError
     if len(os.listdir(buy_path))==0 or len(os.listdir(sell_path))==0:
@@ -209,7 +210,6 @@ def backtest(obj, gpus=0):
 
     dates = [n.strftime("%Y%m%d") for n in daterange(start_date, end_date)]
 
-    outputs = [] 
     # exec = HDAgent(15, obj)
     buy_exec = RLAgent(obj, age, device, 'DRLBuy')
 
@@ -256,7 +256,7 @@ def backtest(obj, gpus=0):
 
             c['drl'] = c.apply(lambda x:x.pss if x.filled_seconds<=x.stepn else x.drl, axis=1)
             c = c[['ticktime', 'drl','pss','agg','stepn','filled_seconds']]
-            save_path = f'res/{obj}/trade/'
+            save_path = os.path.join('res', comment, obj)
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
             c.to_csv(os.path.join(save_path, str(dat)+'.csv'), index=False)
@@ -273,7 +273,7 @@ def backtest(obj, gpus=0):
             print('data error!')
     
     summary = pd.concat(summary, axis=0)
-    summary.to_csv(f'res/{obj}/trade/sum.csv', index=False)
+    summary.to_csv(os.path.join('res', comment, obj, 'sum.csv'), index=False)
 
     gpus.put(gpu_id)
     print(f'{obj} backtest ends successfully, release gpu id:{gpu_id}')
@@ -284,8 +284,12 @@ def backtest(obj, gpus=0):
 if __name__ == '__main__':
     torch.set_grad_enabled(False)
 
+    comment = sys.argv[1]
+
     data = pd.read_csv('symbol_instrumentid2.csv')
-    objs = data.pz.unique()
+    # objs = data.pz.unique()
+    objs = ['rb', 'bu', 'OI', 'i']
+    
     
     gpus = Manager().Queue(8)
     for i in range(8):
@@ -296,7 +300,7 @@ if __name__ == '__main__':
     ps = Pool(60)
     
     for obj in objs:
-        ps.apply_async(backtest, (obj, gpus))
+        ps.apply_async(backtest, (obj, gpus, comment))
     
     ps.close()
     ps.join()
