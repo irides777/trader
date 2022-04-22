@@ -1,15 +1,16 @@
 import numpy as np
 import pandas as pd
 import gym
+import random
 from gym import spaces
 
 class BaseMarket(gym.Env):
     '''
     训练环境
     '''
-
     def __init__(self, datas,  back_length, time_limit, direct=1):
-        
+
+        self.deal_lambda = 0.05 #使用指数分布模拟挂单成交情况
         self.np_random = np.random.RandomState()
         self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Box(
@@ -67,6 +68,9 @@ class BaseMarket(gym.Env):
             if action == 0 and self.bid < 0:
                 reward = 1
                 done = True
+            elif action == 0 and self.bid == 0 and self.time >= self.length:
+                reward = 1
+                done = True
             elif action == 0 and self.time >= self.time_limit:
                 reward = -self.ask+1
                 done = True
@@ -79,6 +83,9 @@ class BaseMarket(gym.Env):
             self._update()
 
             if action == 0 and self.ask > 0:
+                reward = 1
+                done = True
+            elif action == 0 and self.ask == 0 and self.time >= self.length:
                 reward = 1
                 done = True
             elif action == 0 and self.time >= self.time_limit:
@@ -94,6 +101,7 @@ class BaseMarket(gym.Env):
         self.time = 0
         ub = int(len(self.lens))*0.99
         ok = False
+        self.length = self.np_random.exponential(1/self.deal_lambda)
 
         while not ok:
 
@@ -166,6 +174,46 @@ class TestMarket(BaseMarket):
 
         self.is_eval = False
         self.direct = direct
+
+    def step(self, action):
+        '''
+        环境接收到智能体的操作信号后，首先更新下单价格与下单仓位，之后更新tick数据，判断是否成交，返回相应状态和奖励
+        0:在bid0价格上等待 1:以ask价格成交
+        '''
+        done = False
+        reward = 0
+
+        if self.direct == 1:
+            if action == 1:
+                reward = -self.ask+1
+                done = True
+            
+            self._update()
+
+            if action == 0 and self.bid < 0:
+                reward = 1
+                done = True
+            elif action == 0 and self.time >= self.time_limit:
+                reward = -self.ask+1
+                done = True
+
+        elif self.direct == -1:
+            if action == 1:
+                reward = self.bid+1
+                done = True
+            
+            self._update()
+
+            if action == 0 and self.ask > 0:
+                reward = 1
+                done = True
+            elif action == 0 and self.time >= self.time_limit:
+                reward = self.bid+1
+                done = True
+
+        assert not np.isnan(self.state).any()
+
+        return self.state, reward, done, {}
 
     def reset(self, data):
 

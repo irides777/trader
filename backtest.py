@@ -271,6 +271,10 @@ def backtest(obj, gpus, comment):
         except (ValueError, IndexError) as e:
             print(obj)
             print('data error!')
+        except Exception as e:
+            print(e)
+        finally:
+            print('gg')
     
     summary = pd.concat(summary, axis=0)
     summary.to_csv(os.path.join('res', comment, obj, 'sum.csv'), index=False)
@@ -285,10 +289,13 @@ if __name__ == '__main__':
     torch.set_grad_enabled(False)
 
     comment = sys.argv[1]
+    # comment = 'exp005'
 
+    objs = ['CF','nr','sc','rb','al','UR','fu','MA','c','SR','y','TA','eg','v','SA','FG','ru','zn','eb','a','SF','T','au','PK','TF','l','bu']
     data = pd.read_csv('symbol_instrumentid2.csv')
     # objs = data.pz.unique()
-    objs = ['rb', 'bu', 'OI', 'i']
+    # objs = ['CF','nr','sc','rb',]
+    # objs = ['rb']
     
     
     gpus = Manager().Queue(8)
