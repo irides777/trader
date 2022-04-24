@@ -98,7 +98,7 @@ def single_obj_train(begin, end, obj, direct, gpu_id, comment):
     args.eval_gap = 2 ** 6
     args.learner_gpus = gpu_id
     args.cwd = os.path.join(mdir, comment, obj+str(direct))
-    args.break_step = 6e6
+    args.break_step = 4e6
     train_and_evaluate(args)
     torch.cuda.empty_cache()
     
@@ -140,10 +140,11 @@ def multi_objs_train(begin, end, objs, comment):
 
 if __name__ == '__main__':
     data = pd.read_csv('symbol_instrumentid2.csv')
+    objs = ['OI','bu','i','rb']
     # objs = data.pz.unique()
-    objs = ['CF','nr','sc','rb','al','UR','fu','MA','c','SR','y','TA','eg','v','SA','FG','ru','zn','eb','a','SF','T','au','PK','TF','l','bu']
+    # objs = ['CF','nr','sc','rb','al','UR','fu','MA','c','SR','y','TA','eg','v','SA','FG','ru','zn','eb','a','SF','T','au','PK','TF','l','bu']
     comment = sys.argv[1]
 
-    # multi_objs_train(20210101, 20220101, ['rb', 'bu', 'OI', 'i'], comment)
-    multi_objs_train(20180101, 20220101, objs, comment)
-    # single_obj_train(20210101, 20220102, 'rb', 1, 0)
+    multi_objs_train(20210101, 20220101, objs, comment)
+    # multi_objs_train(20180101, 20220101, objs, comment)
+    # single_obj_train(20210101, 20220102, 'rb', direct=1, gpu_id=0, comment=comment)
