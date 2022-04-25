@@ -20,7 +20,7 @@ class BaseMarket(gym.Env):
         self.datas = []
         self.lens = []
         for data in datas:
-            self.datas.append(data[['bid','ask','bidv','askv','volume']].copy()) #
+            self.datas.append(data[['bid','ask','bidv','askv','volume','tur', 'ori_vol']].copy()) #
             self.lens.append(data.shape[0])
         self.datas = pd.concat(self.datas).values
         self.lens = np.cumsum(self.lens)
@@ -39,6 +39,8 @@ class BaseMarket(gym.Env):
         '''
         self.time = self.time+1
         self.tick_state = self.episode_data[self.time+self.back_length-1]
+        self.last_bid = self.bid
+        self.last_ask = self.ask
         self.bid = self.tick_state[0]
         self.ask = self.tick_state[1]
         if self.time+self.back_length >= len(self.episode_data):
@@ -46,8 +48,25 @@ class BaseMarket(gym.Env):
         else:
             self.state = np.vstack([
                 np.array([self.time_limit-self.time,0,0,0,0]),
-                self.episode_data[self.time:self.time+self.back_length]
+                self.episode_data[self.time:self.time+self.back_length,:5]
             ]).reshape(-1)
+    
+    def _ifdeal(self):
+
+        state = self.tick_state
+        vol = state[6]
+        tur = state[5]
+        askv = tur-vol*self.bid
+        bidv = vol-askv
+        # print(vol, tur, askv, bidv)
+        if not (askv<0 or bidv<0):
+            return False
+        
+        v = bidv if self.direct==1 else askv
+        if self.pos_in_queue <= v:
+            return True
+        self.pos_in_queue -= v
+        return False
 
 
     def step(self, action):
@@ -65,13 +84,14 @@ class BaseMarket(gym.Env):
             
             self._update()
 
-            if action == 0 and self.bid < 0:
+
+            if self.bid < 0:
                 reward = 1
                 done = True
-            elif action == 0 and self.bid == 0 and self.time >= self.length:
+            elif self.bid == 0 and self.last_bid == 0 and self._ifdeal():
                 reward = 1
                 done = True
-            elif action == 0 and self.time >= self.time_limit:
+            elif self.time >= self.time_limit:
                 reward = -self.ask+1
                 done = True
 
@@ -82,13 +102,13 @@ class BaseMarket(gym.Env):
             
             self._update()
 
-            if action == 0 and self.ask > 0:
+            if self.ask > 0:
                 reward = 1
                 done = True
-            elif action == 0 and self.ask == 0 and self.time >= self.length:
+            elif self.ask == 0 and self.last_ask == 0 and self._ifdeal():
                 reward = 1
                 done = True
-            elif action == 0 and self.time >= self.time_limit:
+            elif self.time >= self.time_limit:
                 reward = self.bid+1
                 done = True
 
@@ -99,7 +119,7 @@ class BaseMarket(gym.Env):
     def reset(self):
 
         self.time = 0
-        ub = int(len(self.lens))*0.9
+        ub = int(len(self.lens))*0.95
         ok = False
         self.length = self.np_random.exponential(1/self.deal_lambda)
 
@@ -127,20 +147,23 @@ class BaseMarket(gym.Env):
             self.episode_data = data[begin_time-self.back_length+1:end_time+1].copy()
             if self.direct == 1:
                 self.target_price = self.episode_data[self.back_length-1,0]
+                self.pos_in_queue = self.episode_data[self.back_length-1,2]+1
             elif self.direct == -1:
                 self.target_price = self.episode_data[self.back_length-1,1]
+                self.pos_in_queue = self.episode_data[self.back_length-1,3]+1
 
             ok = self._data_check()
         
         self.episode_data[:,0] = self.episode_data[:,0]-self.target_price
         self.episode_data[:,1] = self.episode_data[:,1]-self.target_price
+        self.episode_data[:,5] = self.episode_data[:,5]-self.target_price*self.episode_data[:,6]
 
         self.tick_state = self.episode_data[self.back_length-1]
         self.bid = self.tick_state[0]
         self.ask = self.tick_state[1]
         self.state = np.vstack([
             np.array([self.time_limit,0,0,0,0]),
-            self.episode_data[:self.back_length]
+            self.episode_data[:self.back_length,:5]
         ]).reshape(-1)
         return self.state
 

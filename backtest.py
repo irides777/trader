@@ -293,8 +293,8 @@ if __name__ == '__main__':
 
     # objs = ['CF','nr','sc','rb','al','UR','fu','MA','c','SR','y','TA','eg','v','SA','FG','ru','zn','eb','a','SF','T','au','PK','TF','l','bu']
     data = pd.read_csv('symbol_instrumentid2.csv')
-    # objs = data.pz.unique()
-    objs = ['OI','bu','i','rb']
+    objs = data.pz.unique()
+    # objs = ['OI','bu','i','rb']
     # objs = ['rb']
     
     

@@ -435,8 +435,9 @@ def SingleDayHDAll(fname, srcdir, datenum0, slip_mode=0, exclude_comms=[]):
 
 def preprocess(tickpath='/Data/database/data_zltick/rb', filename='20220321.csv'):
 
-    symb = pd.read_csv('symbol_instrumentid2.csv')
-    symb = {a:b for a, b in zip(symb['pz'], symb['tick'])}
+    tmp = pd.read_csv('symbol_instrumentid2.csv')
+    symb = {a:b for a, b in zip(tmp['pz'], tmp['tick'])}
+    chengshu = {a:b for a, b in zip(tmp['pz'], tmp['chengshu'])}
     obj = tickpath.split('/')[-1]
 
     tickdf = pd.read_csv(os.path.join(tickpath, filename),names=['date','time','ms','lastprice','volume','bid','bidv','ask','askv','opi','tur','contract'])
@@ -460,10 +461,12 @@ def preprocess(tickpath='/Data/database/data_zltick/rb', filename='20220321.csv'
     tickdf[['bid','ask']] = tickdf[['bid','ask']].fillna(method='ffill').fillna(tickdf.iloc[0]['lastprice'])
     tickdf['midprice'] = (tickdf['ask']+tickdf['bid'])/2.0
 
-    tdata = tickdf[['bid','ask','bidv','askv','volume']].copy()
+    tdata = tickdf[['bid','ask','bidv','askv','volume','tur']].copy()
     std = tdata.iloc[0,0]
     tdata.loc[:,'bid'] = (tdata['bid']-std)/symb[obj]
     tdata.loc[:,'ask'] = (tdata['ask']-std)/symb[obj]
+    tdata.loc[:,'tur'] = (tdata['tur']/chengshu[obj]-tdata['volume']*std)/symb[obj]
+    tdata.loc[:,'ori_vol'] = tdata['volume']
 
     def norm(x):
         return (x-x.mean())/x.std()
