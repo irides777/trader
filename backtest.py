@@ -186,7 +186,7 @@ def backtest(obj, gpus, comment):
     args.cwd = buy_path
     args.target_step = args.max_step * 50
     args.eval_times = 2 ** 10
-    args.net_dim = 512
+    args.net_dim = 1024
     args.batch_size = 1024
     args.gamma = 1
     args.explore_rate = 0.1
@@ -289,11 +289,12 @@ if __name__ == '__main__':
     torch.set_grad_enabled(False)
 
     comment = sys.argv[1]
+    # backtest('rb',0,'test')
     # comment = 'exp005'
 
     # objs = ['CF','nr','sc','rb','al','UR','fu','MA','c','SR','y','TA','eg','v','SA','FG','ru','zn','eb','a','SF','T','au','PK','TF','l','bu']
     data = pd.read_csv('symbol_instrumentid2.csv')
-    # objs = data.pz.unique()
+    objs = data.pz.unique()
     objs = ['OI','bu','i','rb']
     # objs = ['rb']
     

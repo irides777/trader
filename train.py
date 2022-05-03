@@ -89,10 +89,10 @@ def single_obj_train(begin, end, obj, direct, gpu_id, comment):
     args.env = env
     args.target_step = args.max_step * 50
     args.eval_times = 2 ** 10
-    args.net_dim = 512
+    args.net_dim = 1024
     args.batch_size = 1024
     args.gamma = 1
-    args.explore_rate = 0.1
+    args.explore_rate = 0.05
     args.seed = 666
     args.learning_rate = 2**-15
     args.eval_gap = 2 ** 6

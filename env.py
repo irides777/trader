@@ -10,7 +10,7 @@ class BaseMarket(gym.Env):
     '''
     def __init__(self, datas,  back_length, time_limit, direct=1):
 
-        self.deal_lambda = 0.1 #使用指数分布模拟挂单成交情况
+        self.deal_lambda = 0.01 #使用指数分布模拟挂单成交情况
         self.np_random = np.random.RandomState()
         self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Box(
