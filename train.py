@@ -81,7 +81,7 @@ def single_obj_train(begin, end, obj, direct, gpu_id, comment):
         'env_name': 'executioner',
         'max_step': 600,
         'state_dim': (100+1)*5,
-        'action_dim': 2,
+        'action_dim': 3,
         'if_discrete': True,
         'target_return': 100
     }
@@ -89,7 +89,7 @@ def single_obj_train(begin, end, obj, direct, gpu_id, comment):
     args.env = env
     args.target_step = args.max_step * 50
     args.eval_times = 2 ** 10
-    args.net_dim = 1024
+    args.net_dim = 512
     args.batch_size = 1024
     args.gamma = 1
     args.explore_rate = 0.05

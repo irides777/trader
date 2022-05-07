@@ -177,7 +177,7 @@ def backtest(obj, gpus, comment):
         'env_name': 'executioner',
         'max_step': 600,
         'state_dim': (100+1)*5,
-        'action_dim': 2,
+        'action_dim': 3,
         'if_discrete': True,
         'target_return': 0.35
     }
@@ -186,7 +186,7 @@ def backtest(obj, gpus, comment):
     args.cwd = buy_path
     args.target_step = args.max_step * 50
     args.eval_times = 2 ** 10
-    args.net_dim = 1024
+    args.net_dim = 512
     args.batch_size = 1024
     args.gamma = 1
     args.explore_rate = 0.1

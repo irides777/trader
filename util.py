@@ -464,6 +464,8 @@ def preprocess(tickpath='/Data/database/data_zltick/rb', filename='20220321.csv'
     std = tdata.iloc[0,0]
     tdata.loc[:,'bid'] = (tdata['bid']-std)/symb[obj]
     tdata.loc[:,'ask'] = (tdata['ask']-std)/symb[obj]
+    tdata.loc[:,'orig_bidv'] = tdata.bidv
+    tdata.loc[:,'orig_askv'] = tdata.askv
 
     def norm(x):
         return (x-x.mean())/x.std()
