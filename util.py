@@ -460,10 +460,11 @@ def preprocess(tickpath='/Data/database/data_zltick/rb', filename='20220321.csv'
     tickdf[['bid','ask']] = tickdf[['bid','ask']].fillna(method='ffill').fillna(tickdf.iloc[0]['lastprice'])
     tickdf['midprice'] = (tickdf['ask']+tickdf['bid'])/2.0
 
-    tdata = tickdf[['bid','ask','bidv','askv','volume']].copy()
+    tdata = tickdf[['bid','ask','bidv','askv','volume','midprice']].copy()
     std = tdata.iloc[0,0]
     tdata.loc[:,'bid'] = (tdata['bid']-std)/symb[obj]
     tdata.loc[:,'ask'] = (tdata['ask']-std)/symb[obj]
+    tdata.loc[:,'midprice'] = (tdata['midprice']-std)/symb[obj]
     tdata.loc[:,'orig_bidv'] = tdata.bidv
     tdata.loc[:,'orig_askv'] = tdata.askv
 
@@ -473,11 +474,27 @@ def preprocess(tickpath='/Data/database/data_zltick/rb', filename='20220321.csv'
     tdata.loc[:,'askv'] = norm(tdata.askv)
     tdata.loc[:,'bidv'] = norm(tdata.bidv)
     tdata.loc[:,'volume'] = norm(tdata.volume)
+
+    tdata.loc[:,'delta'] = tdata.midprice-tdata.midprice.shift(1)
+
+    last_avg = pd.Series(np.zeros(len(tdata.delta)))
+    last_std = pd.Series(np.zeros(len(tdata.delta)))
+    periods = ['10s','30s','60s','5min','15min','60min']
+    periods_length = [20,60,120,300,900,3600]
+    for period, length in zip(periods, periods_length):
+        tdata.loc[:,period+'_avg'] = tdata.midprice.rolling(length).mean()
+        tdata.loc[:,period+'_avg'].fillna(last_avg,inplace=True)
+        last_avg = tdata.loc[:,period+'_avg']
+        tdata.loc[:,period+'_vola'] = tdata.delta.rolling(length).std()
+        tdata.loc[:,period+'_vola'].fillna(last_std,inplace=True)
+        last_std = tdata.loc[:,period+'_vola']
+
+
     # print(type(tdata.isnull()))
     # print(tdata)
-    if pd.isnull(tdata).any().any():
-        print('drop it')
-        print(filename)
-        # print(tdata[pd.isnull(tdata)])
-        raise ValueError
+    # if pd.isnull(tdata).any().any():
+    #     print('drop it')
+    #     print(filename)
+    #     # print(tdata[pd.isnull(tdata)])
+    #     raise ValueError
     return tdata, contract

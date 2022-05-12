@@ -85,7 +85,10 @@ def log_data_generator(dat, obj='rb',
         if ord+120>=all_tick_len:
             continue
         trade_data = tick_data.iloc[ord-100+1:ord+600+1]
-        trade_data = trade_data[['bid','ask','bidv','askv','volume']]
+        periods = ['10s','30s','60s','5min','15min','60min']
+        avgs = [i+'_avg' for i in periods]
+        volas = [i+'_vola' for i in periods]
+        trade_data = trade_data[['bid','ask','bidv','askv','volume']+avgs+volas]
         # trade_data['bid'] = trade_data['bid']/10
         # trade_data['ask'] = trade_data['ask']/10
         # yield trade.fx, trade.agg_cost, trade.pss_cost, trade_data.values
@@ -176,7 +179,7 @@ def backtest(obj, gpus, comment):
         'env_num': 1,
         'env_name': 'executioner',
         'max_step': 600,
-        'state_dim': (100+1)*5,
+        'state_dim': (100+1)*5+12,
         'action_dim': 3,
         'if_discrete': True,
         'target_return': 0.35
@@ -289,13 +292,13 @@ if __name__ == '__main__':
     torch.set_grad_enabled(False)
 
     comment = sys.argv[1]
-    # backtest('rb',0,'test')
+    # backtest('rb',0,'3state_feas')
     # comment = 'exp005'
 
     # objs = ['CF','nr','sc','rb','al','UR','fu','MA','c','SR','y','TA','eg','v','SA','FG','ru','zn','eb','a','SF','T','au','PK','TF','l','bu']
     data = pd.read_csv('symbol_instrumentid2.csv')
     objs = data.pz.unique()
-    objs = ['OI','bu','i','rb']
+    # objs = ['OI','bu','i','rb']
     # objs = ['rb']
     
     
