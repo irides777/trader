@@ -13,6 +13,34 @@ from multiprocessing import Process, Manager, Pool
 import time
 import signal
 # args.init_before_training()
+obj_list = ['SM',
+ 'au',
+ 'hc',
+ 'lh',
+ 'cu',
+ 'PF',
+ 'p',
+ 'ZC',
+ 'sp',
+ 'i',
+ 'jm',
+ 'SF',
+ 'jd',
+ 'pg',
+ 'ni',
+ 'ag',
+ 'RM',
+ 'OI',
+ 'CY',
+ 'lu',
+ 'UR',
+ 'CJ',
+ 'cs',
+ 'sn',
+ 'j',
+ 'pb',
+ 'AP',
+ 'pp']
 
 def daily_data_generator(obj, dates, cwd='.'):
     dir_path = os.path.join(cwd, obj)
@@ -69,7 +97,6 @@ def log_data_generator(dat, obj='rb',
             tim = pd.to_datetime(str(last_date)+' '+tims)
             # print('tim', tim, last_date)
         # print(type(day))
-        # print(dat, tim)
         # print(trade)
         # print(tick_data[tick_data.ticktime==tim])
         # assert 
@@ -80,24 +107,23 @@ def log_data_generator(dat, obj='rb',
         # print(tick_data.iloc[ord-3:ord+3])
         # print('')
         # ord = tick_data[tick_data.ticktime==tim].index[0]
+        # print(dat, tim)
         if ord-100+1<0:
             continue
         if ord+120>=all_tick_len:
             continue
         trade_data = tick_data.iloc[ord-100+1:ord+600+1]
-        periods = ['10s','30s','60s','5min','15min','60min']
+        periods = ['3s','10s','30s','60s','5min','15min']
         avgs = [i+'_avg' for i in periods]
-        volas = [i+'_vola' for i in periods]
-        trade_data = trade_data[['bid','ask','bidv','askv','volume']+avgs+volas]
+        hls = [i+'_hl' for i in periods]
+        cos = [i+'_co' for i in periods]
+        trade_data = trade_data[['bid','ask','bidv','askv','volume']+avgs+hls+cos]
         # trade_data['bid'] = trade_data['bid']/10
         # trade_data['ask'] = trade_data['ask']/10
         # yield trade.fx, trade.agg_cost, trade.pss_cost, trade_data.values
         yield trade, trade_data.values
 
 
-def daterange(start_date, end_date):
-    for n in range(int ((end_date - start_date).days)):
-        yield start_date + timedelta(n)
 
 class Agent(object):
 
@@ -160,7 +186,7 @@ class RLAgent(Agent):
         action = ten_a.argmax(dim=1).cpu().numpy()[0]
         return action
 
-def backtest(obj, gpus, comment):
+def backtest(obj, gpus, comment, model_name):
     # gpu_id = int(sys.argv[2])
     gpu_id = gpus if gpus==0 else gpus.get()
     print(f'{obj} backtest begins, gpu id:{gpu_id}')
@@ -169,8 +195,12 @@ def backtest(obj, gpus, comment):
     tick = pd.read_csv('symbol_instrumentid2.csv')
     tick = tick[tick.pz==obj].tick.values[0]
     chengshu = get_unit_cost(obj.lower())[1]
-    buy_path = os.path.join(mdir, comment, f'{obj}1')
-    sell_path = os.path.join(mdir, comment, f'{obj}-1')
+
+    if model_name == 'objs':
+        model_name = obj
+
+    buy_path = os.path.join(mdir, comment, f'{model_name}1')
+    sell_path = os.path.join(mdir, comment, f'{model_name}-1')
     if not os.path.exists(buy_path) or not os.path.exists(sell_path):
         raise NotImplementedError
     if len(os.listdir(buy_path))==0 or len(os.listdir(sell_path))==0:
@@ -179,8 +209,8 @@ def backtest(obj, gpus, comment):
         'env_num': 1,
         'env_name': 'executioner',
         'max_step': 600,
-        'state_dim': (100+1)*5+12,
-        'action_dim': 3,
+        'state_dim': (100+1)*5+18,
+        'action_dim': 2,
         'if_discrete': True,
         'target_return': 0.35
     }
@@ -208,8 +238,8 @@ def backtest(obj, gpus, comment):
     device = torch.device(f'cuda:{args.learner_gpus}')
     # device = torch.device('cpu')
 
-    start_date = date(2022, 1, 4)
-    end_date = date(2022, 3, 22)
+    start_date = date(2022, 3, 22)
+    end_date = date(2022, 3, 23)
 
     dates = [n.strftime("%Y%m%d") for n in daterange(start_date, end_date)]
 
@@ -258,8 +288,14 @@ def backtest(obj, gpus, comment):
             c = pd.concat([b,c], axis=1)
 
             c['drl'] = c.apply(lambda x:x.pss if x.filled_seconds<=x.stepn else x.drl, axis=1)
+            c['drl'] = c.apply(lambda x:x.pss if x.stepn==300 and x.filled_seconds>300 else x.drl, axis=1)
             c = c[['ticktime', 'drl','pss','agg','stepn','filled_seconds']]
-            save_path = os.path.join('res', comment, obj)
+
+            if model_name != obj:
+                save_path = os.path.join('res', comment, f'{model_name}_{obj}')
+            else:
+                save_path = os.path.join('res', comment, f'{obj}')
+
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
             c.to_csv(os.path.join(save_path, str(dat)+'.csv'), index=False)
@@ -276,11 +312,10 @@ def backtest(obj, gpus, comment):
             print('data error!')
         except Exception as e:
             print(e)
-        finally:
             print('gg')
     
     summary = pd.concat(summary, axis=0)
-    summary.to_csv(os.path.join('res', comment, obj, 'sum.csv'), index=False)
+    summary.to_csv(os.path.join(save_path, 'sum.csv'), index=False)
 
     gpus.put(gpu_id)
     print(f'{obj} backtest ends successfully, release gpu id:{gpu_id}')
@@ -291,15 +326,18 @@ def backtest(obj, gpus, comment):
 if __name__ == '__main__':
     torch.set_grad_enabled(False)
 
-    comment = sys.argv[1]
-    # backtest('rb',0,'3state_feas')
+    # comment = sys.argv[1]
+    # model_name = sys.argv[2]
+    # backtest('ZC',0,'exp0005_fea','objs')
     # comment = 'exp005'
 
     # objs = ['CF','nr','sc','rb','al','UR','fu','MA','c','SR','y','TA','eg','v','SA','FG','ru','zn','eb','a','SF','T','au','PK','TF','l','bu']
     data = pd.read_csv('symbol_instrumentid2.csv')
-    objs = data.pz.unique()
+    # objs = data.pz.unique()
     # objs = ['OI','bu','i','rb']
-    # objs = ['rb']
+    # objs = obj_list
+    # objs = ['OI','bu','i','rb']
+    objs = ['rb']
     
     
     gpus = Manager().Queue(8)
@@ -310,8 +348,13 @@ if __name__ == '__main__':
 
     ps = Pool(60)
     
-    for obj in objs:
-        ps.apply_async(backtest, (obj, gpus, comment))
+    # models = ['exp0005_fea','exp001_fea','exp002_fea','exp003_fea', 'exp004_fea',
+    #  'exp008_fea', 'exp016_fea','baseline_fea']#, '3state_feas_gamma2','baseline', 'exp01_1year','exp001_1year','exp0007_1year','queue','queue_agg']
+    models = ['exp003_fea']
+    for model in models:
+        for obj in objs:
+            # ps.apply_async(backtest, (obj, gpus, model, 'objs'))
+            backtest(obj, gpus, model, 'objs')
     
     ps.close()
     ps.join()

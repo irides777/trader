@@ -3,6 +3,7 @@
 /.vscode
 /.ipynb_checkpoints
 /__pycache__
+/feas
 /executioner_D3QN_*
 *.txt
 *.jpg

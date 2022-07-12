@@ -1,4 +1,5 @@
 import datetime
+from datetime import timedelta, date
 import os
 import numpy as np
 import pandas as pd
@@ -433,13 +434,17 @@ def SingleDayHDAll(fname, srcdir, datenum0, slip_mode=0, exclude_comms=[]):
 
     return orderdf, accs_setting
 
+def daterange(start_date, end_date):
+    for n in range(int ((end_date - start_date).days)):
+        yield start_date + timedelta(n)
+
 def preprocess(tickpath='/Data/database/data_zltick/rb', filename='20220321.csv'):
 
     symb = pd.read_csv('symbol_instrumentid2.csv')
     symb = {a:b for a, b in zip(symb['pz'], symb['tick'])}
     obj = tickpath.split('/')[-1]
 
-    tickdf = pd.read_csv(os.path.join(tickpath, filename),names=['date','time','ms','lastprice','volume','bid','bidv','ask','askv','opi','tur','contract'])
+    tickdf = pd.read_csv(os.path.join(tickpath, filename),names=['date','time','ms','lastprice','volume','bid','bidv','ask','askv','opi','tur','contract']).iloc[1:]
     contract = tickdf['contract'].iloc[0]
     tickdf[['lastprice','volume','bid','bidv','ask','askv','opi','tur']] = tickdf[['lastprice','volume','bid','bidv','ask','askv','opi','tur']].astype('float32')
     tickdf['datestr'] = tickdf['date'].apply(lambda x: '%s-%s-%s'%(str(x)[:4], str(x)[4:6], str(x)[6:8]))
@@ -462,11 +467,16 @@ def preprocess(tickpath='/Data/database/data_zltick/rb', filename='20220321.csv'
 
     tdata = tickdf[['bid','ask','bidv','askv','volume','midprice']].copy()
     std = tdata.iloc[0,0]
+    tdata.loc[:,'orig_midprice'] = tdata['midprice']
+    tdata.loc[:,'orig_bid'] = tdata.bid
+    tdata.loc[:,'orig_ask'] = tdata.ask
+    tdata.loc[:,'orig_bidv'] = tdata.bidv
+    tdata.loc[:,'orig_askv'] = tdata.askv
+    tdata.loc[:,'orig_v'] = tdata.volume
+
     tdata.loc[:,'bid'] = (tdata['bid']-std)/symb[obj]
     tdata.loc[:,'ask'] = (tdata['ask']-std)/symb[obj]
     tdata.loc[:,'midprice'] = (tdata['midprice']-std)/symb[obj]
-    tdata.loc[:,'orig_bidv'] = tdata.bidv
-    tdata.loc[:,'orig_askv'] = tdata.askv
 
     def norm(x):
         return (x-x.mean())/x.std()
@@ -475,20 +485,42 @@ def preprocess(tickpath='/Data/database/data_zltick/rb', filename='20220321.csv'
     tdata.loc[:,'bidv'] = norm(tdata.bidv)
     tdata.loc[:,'volume'] = norm(tdata.volume)
 
-    tdata.loc[:,'delta'] = tdata.midprice-tdata.midprice.shift(1)
+    # tdata.loc[:,'delta'] = tdata.midprice-tdata.midprice.shift(1)
+    # 计算最高-最低与收-开/高-低
 
-    last_avg = pd.Series(np.zeros(len(tdata.delta)))
-    last_std = pd.Series(np.zeros(len(tdata.delta)))
-    periods = ['10s','30s','60s','5min','15min','60min']
-    periods_length = [20,60,120,300,900,3600]
+    last_avg = pd.Series(np.zeros(len(tdata.askv)))
+    last_std = pd.Series(np.zeros(len(tdata.askv)))
+    periods = ['3s','10s','30s','60s','5min','15min']
+    periods_length = [6,20,60,120,600,1800]
+    
+    def cal_bar_hl(x):
+        '''
+        计算以当前时刻为close的前一个bar的h-l
+        '''
+        return x.max()-x.min()
+
+    def cal_bar_co():
+        '''
+        计算以当前时刻为close的前一个bar的c-o
+        '''
     for period, length in zip(periods, periods_length):
         tdata.loc[:,period+'_avg'] = tdata.midprice.rolling(length).mean()
         tdata.loc[:,period+'_avg'].fillna(last_avg,inplace=True)
         last_avg = tdata.loc[:,period+'_avg']
-        tdata.loc[:,period+'_vola'] = tdata.delta.rolling(length).std()
-        tdata.loc[:,period+'_vola'].fillna(last_std,inplace=True)
-        last_std = tdata.loc[:,period+'_vola']
 
+        resampled_ohlc = tdata.midprice.resample(period,label='right').ohlc()
+        resampled_ohlc.loc[:,'hl'] = resampled_ohlc.high - resampled_ohlc.low
+        resampled_ohlc.loc[:,'co'] = resampled_ohlc.close - resampled_ohlc.open
+        tdata = pd.merge(tdata, resampled_ohlc[['hl','co']],how='left',on='datetime')\
+            .rename(columns={'hl':period+'_hl','co':period+'_co'})
+        # tdata.loc[:,period+'_delta'] = tdata.midprice-tdata.midprice.shift(length)
+        # tdata.loc[:,period+'_vola'] = tdata[period+'_delta'].rolling(3600).std()
+        # tdata.loc[:,period+'_vola'].fillna(last_std,inplace=True)
+        # last_std = tdata.loc[:,period+'_vola']
+    
+    tdata.fillna(method='ffill',inplace=True)
+    
+    tdata.fillna(0,inplace=True)
 
     # print(type(tdata.isnull()))
     # print(tdata)

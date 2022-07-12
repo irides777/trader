@@ -11,11 +11,11 @@ class BaseMarket(gym.Env):
     '''
     def __init__(self, datas,  back_length, time_limit, direct=1):
 
-        self.deal_lambda = 5 #使用gamma分布模拟挂单成交情况
+        self.deal_lambda = 0.16 #使用exp分布模拟挂单成交情况 0.005 0.01 0.02 0.04 0.08 0.16
         self.np_random = np.random.RandomState()
-        self.action_space = spaces.Discrete(3)
+        self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=((back_length+1)*5+12,)
+            low=-np.inf, high=np.inf, shape=((back_length+1)*5+18,)
         )
 
         self.datas = []
@@ -23,13 +23,14 @@ class BaseMarket(gym.Env):
         self.feas = []
         self.lens = []
 
-        periods = ['10s','30s','60s','5min','15min','60min']
+        periods = ['3s','10s','30s','60s','5min','15min']
         avgs = [i+'_avg' for i in periods]
-        volas = [i+'_vola' for i in periods]
+        hls = [i+'_hl' for i in periods]
+        cos = [i+'_co' for i in periods]
         for data in datas:
             self.datas.append(data[['bid','ask','bidv','askv','volume']].copy()) #
             self.orig_v.append(data[['orig_bidv','orig_askv']])
-            self.feas.append(data[avgs+volas])
+            self.feas.append(data[avgs+hls+cos])
             self.lens.append(data.shape[0])
         self.datas = pd.concat(self.datas).values
         self.orig_v = pd.concat(self.orig_v).values
@@ -75,46 +76,46 @@ class BaseMarket(gym.Env):
         reward = 0
 
         if self.direct == 1:
-            if action == 2:
+            if action == 1:
                 reward = -self.ask+1
                 done = True
-            elif action == 1:#把限价单挂在新价格上
-                self.lim_price = self.bid
-                self.hd_time = 0
-                self.length = self.np_random.gamma(self.tick_v[0], 1/self.deal_lambda)
+            # elif action == 1:#把限价单挂在新价格上
+            #     self.lim_price = self.bid
+            #     self.hd_time = 0
+            #     self.length = self.np_random.gamma(self.tick_v[0], 1/self.deal_lambda)
             
             self._update()
             
-            if action < 2 and self.bid < self.lim_price:
+            if action < 1 and self.bid < self.lim_price:
                 reward = 1-self.lim_price
                 done = True
-            elif action < 2 and self.bid == self.lim_price\
-                 and self.hd_time >= self.length:
-                reward = 1-self.lim_price
-                done = True
-            elif action < 2 and self.time >= self.time_limit:
+            # elif action < 1 and self.bid == self.lim_price\
+            #      and self.hd_time >= self.length:
+            #     reward = 1-self.lim_price
+            #     done = True
+            elif action < 1 and self.time >= self.time_limit:
                 reward = -self.ask+1
                 done = True
 
         elif self.direct == -1:
-            if action == 2:
+            if action == 1:
                 reward = self.bid+1
                 done = True
-            elif action == 1:#把限价单挂在新价格上
-                self.lim_price = self.ask
-                self.hd_time = 0
-                self.length = self.np_random.gamma(self.tick_v[1], 1/self.deal_lambda)
+            # elif action == 1:#把限价单挂在新价格上
+            #     self.lim_price = self.ask
+            #     self.hd_time = 0
+            #     self.length = self.np_random.gamma(self.tick_v[1], 1/self.deal_lambda)
 
             self._update()
 
-            if action < 2 and self.ask > self.lim_price:
+            if action < 1 and self.ask > self.lim_price:
                 reward = 1+self.lim_price
                 done = True
-            elif action < 2 and self.ask == self.lim_price\
-                 and self.hd_time >= self.length:
-                reward = 1+self.lim_price
-                done = True
-            elif action < 2 and self.time >= self.time_limit:
+            # elif action < 1 and self.ask == self.lim_price\
+            #      and self.hd_time >= self.length:
+            #     reward = 1+self.lim_price
+            #     done = True
+            elif action < 1 and self.time >= self.time_limit:
                 reward = self.bid+1
                 done = True
 
@@ -174,9 +175,9 @@ class BaseMarket(gym.Env):
         
         self.lim_price = 0
         if self.direct == 1:
-            self.length = self.np_random.gamma(self.tick_v[0], 1/self.deal_lambda)
+            self.length = self.np_random.exponential(1/self.deal_lambda)#gamma(self.tick_v[0], 1/self.deal_lambda)
         elif self.direct == -1:
-            self.length = self.np_random.gamma(self.tick_v[1], 1/self.deal_lambda)
+            self.length = self.np_random.exponential(1/self.deal_lambda)#gamma(s1], 1/self.deal_lambda)
 
         self.state = np.vstack([
             np.array([self.time_limit,self.lim_price,0,0,0]),
@@ -193,7 +194,8 @@ class BaseMarket(gym.Env):
         data = self.episode_data
         ok = np.all(data[:,0] < data[:,1]) \
             and np.all(data != np.inf) \
-            and np.all(data != -np.inf)
+            and np.all(data != -np.inf) \
+            and not np.isnan(self.episode_fea).any()
         return ok
 
 class TestMarket(BaseMarket):
@@ -204,9 +206,9 @@ class TestMarket(BaseMarket):
     def __init__(self, back_length, time_limit, direct):
         
         self.np_random = np.random.RandomState()
-        self.action_space = spaces.Discrete(3)
+        self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=((back_length+1)*5+12,)
+            low=-np.inf, high=np.inf, shape=((back_length+1)*5+18,)
         )
         # self.data.loc[:,'tur'] = self.data['tur']/self.data['volume']
 
@@ -247,34 +249,34 @@ class TestMarket(BaseMarket):
         reward = 0
 
         if self.direct == 1:
-            if action == 2:
+            if action == 1:
                 reward = -self.ask+1
                 done = True
-            elif action == 1:#把限价单挂在新价格上
-                self.lim_price = self.bid
+            # elif action == 1:#把限价单挂在新价格上
+            #     self.lim_price = self.bid
             
             self._update()
             
-            if action < 2 and self.bid < self.lim_price:
+            if action < 1 and self.bid < self.lim_price:
                 reward = 1-self.lim_price
                 done = True
-            elif action < 2 and self.time >= self.time_limit:
+            elif action < 1 and self.time >= self.time_limit:
                 reward = -self.ask+1
                 done = True
 
         elif self.direct == -1:
-            if action == 2:
+            if action == 1:
                 reward = self.bid+1
                 done = True
-            elif action == 1:#把限价单挂在新价格上
-                self.lim_price = self.ask
+            # elif action == 1:#把限价单挂在新价格上
+            #     self.lim_price = self.ask
 
             self._update()
 
-            if action < 2 and self.ask > self.lim_price:
+            if action < 1 and self.ask > self.lim_price:
                 reward = 1+self.lim_price
                 done = True
-            elif action < 2 and self.time >= self.time_limit:
+            elif action < 1 and self.time >= self.time_limit:
                 reward = self.bid+1
                 done = True
 
